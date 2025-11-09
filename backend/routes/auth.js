@@ -4,13 +4,14 @@ import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../database/init.js';
 import { JWT_SECRET } from '../server.js';
+// Auth0 middleware removed; using local JWT sessions only
 
 const router = express.Router();
 
 // Register user
 router.post('/register', async (req, res) => {
   try {
-    const { name, email, password, wallet_address, role_title } = req.body;
+    const { name, email, password, wallet_address, role_title, profile_description } = req.body;
     
     if (!name || (!email && !wallet_address)) {
       return res.status(400).json({ error: 'Name and either email or wallet address required' });
@@ -20,9 +21,9 @@ router.post('/register', async (req, res) => {
     const hashedPassword = password ? await bcrypt.hash(password, 10) : null;
 
     db.run(
-      `INSERT INTO users (id, name, email, password, wallet_address, role_title) 
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [userId, name, email, hashedPassword, wallet_address, role_title || 'Member'],
+      `INSERT INTO users (id, name, email, password, wallet_address, role_title, profile_description) 
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [userId, name, email, hashedPassword, wallet_address, role_title || 'Member', profile_description || null],
       function(err) {
         if (err) {
           if (err.message.includes('UNIQUE constraint failed')) {
@@ -44,7 +45,7 @@ router.post('/register', async (req, res) => {
 
         res.json({ 
           token, 
-          user: { id: userId, name, email, wallet_address, role_title: role_title || 'Member' } 
+          user: { id: userId, name, email, wallet_address, role_title: role_title || 'Member', profile_description: profile_description || null } 
         });
       }
     );
@@ -85,7 +86,7 @@ router.post('/login', async (req, res) => {
         
         res.json({ 
           token, 
-          user: { id: user.id, name: user.name, email: user.email, wallet_address: user.wallet_address, role_title: user.role_title } 
+          user: { id: user.id, name: user.name, email: user.email, wallet_address: user.wallet_address, role_title: user.role_title, profile_description: user.profile_description || null } 
         });
         return;
       }
@@ -114,7 +115,7 @@ router.post('/login', async (req, res) => {
       
       res.json({ 
         token, 
-        user: { id: user.id, name: user.name, email: user.email, wallet_address: user.wallet_address, role_title: user.role_title } 
+        user: { id: user.id, name: user.name, email: user.email, wallet_address: user.wallet_address, role_title: user.role_title, profile_description: user.profile_description || null } 
       });
     });
   } catch (error) {
@@ -131,13 +132,13 @@ export const authenticateToken = (req, res, next) => {
     return res.status(401).json({ error: 'Access token required' });
   }
 
-  jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) {
-      return res.status(403).json({ error: 'Invalid token' });
-    }
-    req.user = user;
-    next();
-  });
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.user = decoded;
+    return next();
+  } catch (err) {
+    return res.status(401).json({ error: 'Invalid token' });
+  }
 };
 
 // Get current user
@@ -149,8 +150,37 @@ router.get('/me', authenticateToken, (req, res) => {
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
-    res.json({ user: { id: user.id, name: user.name, email: user.email, wallet_address: user.wallet_address, role_title: user.role_title } });
+    let profile_links = []
+    try {
+      if (user.profile_links) profile_links = JSON.parse(user.profile_links)
+    } catch (e) { profile_links = [] }
+
+    res.json({ user: { id: user.id, name: user.name, email: user.email, wallet_address: user.wallet_address, role_title: user.role_title, profile_description: user.profile_description || null, google_calendar_id: user.google_calendar_id || null, profile_links } });
   });
+});
+
+// Update user profile (bio and google calendar id)
+router.patch('/profile', authenticateToken, (req, res) => {
+  const { profile_description, google_calendar_id } = req.body;
+  const profile_links = req.body.profile_links ? JSON.stringify(req.body.profile_links) : null
+
+  db.run(
+    'UPDATE users SET profile_description = ?, google_calendar_id = ?, profile_links = ? WHERE id = ?',
+    [profile_description || null, google_calendar_id || null, profile_links, req.user.userId],
+    function(err) {
+      if (err) {
+        return res.status(500).json({ error: 'Failed to update profile' });
+      }
+
+      db.get('SELECT id, name, email, wallet_address, role_title, profile_description, google_calendar_id, profile_links FROM users WHERE id = ?', [req.user.userId], (err2, user) => {
+        if (err2) return res.status(500).json({ error: 'Failed to fetch updated user' });
+        let links = []
+        try { if (user.profile_links) links = JSON.parse(user.profile_links) } catch (e) { links = [] }
+        user.profile_links = links
+        res.json({ user });
+      });
+    }
+  );
 });
 
 // Update user wallet address

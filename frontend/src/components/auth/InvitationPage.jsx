@@ -6,6 +6,7 @@ import axios from 'axios';
 const API_BASE = 'http://localhost:3001/api';
 
 export function InvitationPage({ invitation, user, onLogin, onRegister, onAccept }) {
+  // using local token only for backend calls
   const [inviterReputation, setInviterReputation] = useState({ client: null, vendor: null });
   const [loadingReputation, setLoadingReputation] = useState(true);
   
@@ -26,12 +27,10 @@ export function InvitationPage({ invitation, user, onLogin, onRegister, onAccept
 
     try {
       setLoadingReputation(true);
-      const token = localStorage.getItem('token');
-      const headers = token ? { Authorization: `Bearer ${token}` } : {};
-      
-      const response = await axios.get(`${API_BASE}/reputation/user/${inviterId}`, {
-        headers
-      });
+      const localToken = localStorage.getItem('token');
+      const headers = localToken ? { Authorization: `Bearer ${localToken}` } : {};
+
+      const response = await axios.get(`${API_BASE}/reputation/user/${inviterId}`, { headers });
       setInviterReputation(response.data.reputation || { client: null, vendor: null });
     } catch (error) {
       console.error('Error loading inviter reputation:', error);
@@ -80,6 +79,11 @@ export function InvitationPage({ invitation, user, onLogin, onRegister, onAccept
             <div className="mt-2 text-sm">
               <span><strong>Invited by:</strong> {invitation.invited_by_name}</span>
             </div>
+            {invitation.invited_by_profile_description && (
+              <div className="mt-2 text-sm text-gray-600">
+                <em>{invitation.invited_by_profile_description}</em>
+              </div>
+            )}
           </div>
 
           {/* Reputation Score Display */}

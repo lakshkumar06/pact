@@ -11,6 +11,7 @@ import contractRoutes from './routes/contracts.js';
 import dashboardRoutes from './routes/dashboard.js';
 import versionRoutes from './routes/versions.js';
 import aiRoutes from './routes/ai.js';
+import claudeRoutes from './routes/claude.js';
 import reputationRoutes from './routes/reputation.js';
 
 const app = express();
@@ -30,6 +31,7 @@ app.use('/api/contracts', contractRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api', versionRoutes);
 app.use('/api', aiRoutes);
+app.use('/api/claude', claudeRoutes);
 app.use('/api/reputation', reputationRoutes);
 
 // Health check
@@ -37,8 +39,19 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', message: 'API is running' });
 });
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+});
+
+server.on('error', (err) => {
+  if (err && err.code === 'EADDRINUSE') {
+    console.error(`Port ${PORT} is already in use. Another process is listening on this port.`);
+    console.error('Use the following PowerShell command to find and kill the process:');
+    console.error(`Get-NetTCPConnection -LocalPort ${PORT} -State Listen | Select-Object -ExpandProperty OwningProcess | Sort-Object -Unique | ForEach-Object { Write-Output \"Killing PID $_\"; taskkill /PID $_ /F }`);
+    process.exit(1);
+  }
+  console.error('Server error:', err);
+  process.exit(1);
 });
 
 export { JWT_SECRET };

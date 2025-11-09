@@ -15,8 +15,10 @@ import { LoginForm } from './components/auth/LoginForm'
 import { EmailRegisterForm } from './components/auth/EmailRegisterForm'
 import { WalletRegisterForm } from './components/auth/WalletRegisterForm'
 import { InvitationPage } from './components/auth/InvitationPage'
+import ProfileSettings from './components/auth/ProfileSettings'
 import { ContractDetailView } from './components/contracts/ContractDetailView'
 import './App.css'
+import Home from './components/Home'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api'
 
@@ -35,6 +37,8 @@ function App() {
   const [contractInvitations, setContractInvitations] = useState([])
   const [invitationData, setInvitationData] = useState(null)
   const [showInvitationPage, setShowInvitationPage] = useState(false)
+  const [showProfileSettings, setShowProfileSettings] = useState(false)
+  // Auth0 removed — using local JWT stored in localStorage
   const [contractVersions, setContractVersions] = useState([])
   const [contractHistory, setContractHistory] = useState([])
   const [selectedVersion, setSelectedVersion] = useState(null)
@@ -54,9 +58,10 @@ function App() {
     if (token) {
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
       loadDashboard()
-    } else {
-      setLoading(false)
+      return
     }
+
+    setLoading(false)
   }, [])
 
   useEffect(() => {
@@ -276,6 +281,12 @@ function App() {
 
     try {
       const token = window.location.pathname.split('/invite/')[1]
+      // Ensure we have an Authorization header: prefer existing axios default, otherwise try Auth0
+      const localToken = localStorage.getItem('token')
+      if (!axios.defaults.headers.common['Authorization'] && localToken) {
+        axios.defaults.headers.common['Authorization'] = `Bearer ${localToken}`
+      }
+
       await axios.post(`${API_BASE}/contracts/invite/${token}/accept`)
       alert('Successfully joined the contract!')
       // Redirect to dashboard
@@ -314,72 +325,65 @@ function App() {
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="max-w-md w-full space-y-8">
-          <div>
-            <h2 className="mt-6 text-center text-3xl font-semibold text-gray-900">
-              Agreed.
-            </h2>
-            <p className="mt-2 text-center text-sm text-gray-600">
-              Collaborative B2B Contract Workspace
-            </p>
-          </div>
-          
-          <div className="space-y-4">
-            <WalletMultiButton className="w-full" />
-            
-            <div className="text-center text-sm text-gray-500">or</div>
-            
-            {showLogin ? (
+      <>
+        <Home 
+          onShowLogin={() => setShowLogin(true)} 
+          onShowEmailRegister={() => setShowEmailRegister(true)} 
+          onShowWalletRegister={() => setShowWalletRegister(true)}
+        />
+
+        {/* Render auth forms as overlays when requested */}
+        {showLogin && (
+          <div className="fixed inset-0 flex items-center justify-center bg-black/40">
+            <div className="bg-white p-6 rounded-md shadow-lg w-full max-w-md">
               <LoginForm onLogin={handleLogin} onSwitch={() => setShowLogin(false)} />
-            ) : showEmailRegister ? (
+            </div>
+          </div>
+        )}
+
+        {showEmailRegister && (
+          <div className="fixed inset-0 flex items-center justify-center bg-black/40">
+            <div className="bg-white p-6 rounded-md shadow-lg w-full max-w-md">
               <EmailRegisterForm onRegister={handleRegister} onSwitch={() => setShowEmailRegister(false)} />
-            ) : showWalletRegister ? (
+            </div>
+          </div>
+        )}
+
+        {showWalletRegister && (
+          <div className="fixed inset-0 flex items-center justify-center bg-black/40">
+            <div className="bg-white p-6 rounded-md shadow-lg w-full max-w-md">
               <WalletRegisterForm 
                 onRegister={handleWalletRegister} 
                 onSwitch={() => setShowWalletRegister(false)}
                 walletAddress={publicKey?.toString()}
               />
-            ) : (
-              <div className="space-y-4">
-                <button
-                  onClick={() => setShowLogin(true)}
-                  className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-teal-600 hover:bg-blue-700"
-                >
-                  Email Login
-                </button>
-                <button
-                  onClick={() => setShowEmailRegister(true)}
-                  className="w-full flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
-                >
-                  Email Register
-                </button>
-              </div>
-            )}
+            </div>
           </div>
-        </div>
-      </div>
+        )}
+      </>
     )
   }
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white shadow fixed top-0 left-0 right-0 z-30">
+  <nav className="bg-linear-to-r from-indigo-600 to-teal-500 text-white shadow-md fixed top-0 left-0 right-0 z-30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-20">
-            <div className="flex items-center">
-              <img src="/logo.png" alt="Agreed logo" className="h-12 w-auto mr-2" />
-            </div>
-            <div className="flex items-center space-x-4">
-              <span className="text-sm text-gray-700">{user.name}</span>
+              <div className="flex items-center">
+                <a href="/" aria-label="Home">
+                  <img src="/logo.png" alt="Agreed logo" className="h-12 w-auto mr-2" />
+                </a>
+              </div>
+              <div className="flex items-center space-x-4">
+              <button onClick={() => setShowProfileSettings(true)} className="text-sm text-white/90 hover:underline">{user.name}</button>
               {connected && (
-                <div className="text-xs text-gray-500">
+                <div className="text-xs text-white/80">
                   {publicKey?.toString().slice(0, 8)}...
                 </div>
               )}
               <button
                 onClick={handleLogout}
-                className="text-sm text-gray-500 hover:text-gray-700"
+                className="text-sm text-white/90 hover:text-white"
               >
                 Logout
               </button>
@@ -423,6 +427,7 @@ function App() {
           </>
         ) : (
           <Dashboard 
+            user={user}
             contracts={contracts} 
             onCreateContract={createContract}
             onRefresh={loadDashboard}
@@ -433,6 +438,9 @@ function App() {
           />
         )}
       </div>
+      {showProfileSettings && (
+        <ProfileSettings user={user} onClose={() => setShowProfileSettings(false)} onSave={(u) => setUser(u)} />
+      )}
     </div>
   )
 }

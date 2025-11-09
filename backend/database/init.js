@@ -10,6 +10,9 @@ import { migrateIpfsVersions } from './migrate_ipfs_versions.js';
 import { migrateAddSolanaContractFields } from './migrate_add_solana_contract_fields.js';
 import { migrateReputationScores } from './migrate_reputation_scores.js';
 import { migrateRemoveWeight } from './migrate_remove_weight.js';
+import { migrateAddProfileDescription } from './migrate_add_profile_description.js';
+import { migrateAddProfileLinks } from './migrate_add_profile_links.js';
+import { migrateAddGoogleCalendarId } from './migrate_add_google_calendar_id.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -42,6 +45,9 @@ export function initDatabase() {
         migrateIpfsVersions();
         migrateReputationScores();
         migrateRemoveWeight();
+    migrateAddProfileDescription();
+        migrateAddProfileLinks();
+    migrateAddGoogleCalendarId();
         resolve();
       }
     });

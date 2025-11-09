@@ -320,7 +320,7 @@ router.get('/:id/invitations', authenticateToken, (req, res) => {
   const { id } = req.params;
   
   db.all(
-    `SELECT ci.*, u.name as invited_by_name
+    `SELECT ci.*, u.name as invited_by_name, u.profile_description as invited_by_profile_description
      FROM contract_invitations ci
      JOIN users u ON ci.invited_by = u.id
      WHERE ci.contract_id = ?`,
@@ -340,7 +340,7 @@ router.get('/invite/:token', (req, res) => {
   
   db.get(
     `SELECT ci.*, c.title as contract_title, c.description as contract_description, 
-     u.name as invited_by_name, u.id as invited_by_user_id
+     u.name as invited_by_name, u.id as invited_by_user_id, u.profile_description as invited_by_profile_description
      FROM contract_invitations ci
      JOIN contracts c ON ci.contract_id = c.id
      JOIN users u ON ci.invited_by = u.id

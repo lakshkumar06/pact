@@ -8,7 +8,32 @@ import { dirname, join } from 'path';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const idl = JSON.parse(readFileSync(join(__dirname, '../../agreed_contracts/target/idl/agreed_contracts.json'), 'utf8'));
+
+// Load IDL lazily so backend can start even when the on-chain program hasn't
+// been built yet. If missing, we log a clear warning and throw a helpful
+// error when an on-chain function is actually invoked.
+let idl = null;
+function loadIdl() {
+  if (idl) return idl;
+  const idlPath = join(__dirname, '../../agreed_contracts/target/idl/agreed_contracts.json');
+  try {
+    idl = JSON.parse(readFileSync(idlPath, 'utf8'));
+    return idl;
+  } catch (err) {
+    console.warn(`Solana IDL not found at ${idlPath}. On-chain features will be disabled until you run 'anchor build'.`);
+    idl = null;
+    return null;
+  }
+}
+
+function getProgram(provider) {
+  const loaded = loadIdl();
+  if (!loaded) {
+    throw new Error('Missing Solana IDL: agreed_contracts/target/idl/agreed_contracts.json not found. Run `anchor build` in the agreed_contracts project to generate it.');
+  }
+  // Use PROGRAM_ID (PublicKey) as the program id argument
+  return new Program(loaded, PROGRAM_ID, provider);
+}
 
 const SOLANA_RPC_URL = 'https://api.devnet.solana.com';
 const MEMO_PROGRAM_ID = 'MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgd6ofga5DgLRkJrFb';
@@ -146,9 +171,9 @@ export async function initializeContractOnChain(contractId, ipfsHash, participan
     const participants = participantWallets.map(addr => new PublicKey(addr));
     
     // Create wallet and provider
-    const wallet = new Wallet(signer);
-    const provider = new AnchorProvider(connection, wallet, { commitment: 'confirmed' });
-    const program = new Program(idl, provider);
+  const wallet = new Wallet(signer);
+  const provider = new AnchorProvider(connection, wallet, { commitment: 'confirmed' });
+  const program = getProgram(provider);
     
     // Derive contract PDA
     const [contractPDA] = PublicKey.findProgramAddressSync(
@@ -226,9 +251,9 @@ export async function updateContractIpfsOnChainByPDA(contractPDA, ipfsHash, upda
     const updater = await parseKeypair(updaterPrivateKey);
     
     // Create wallet and provider
-    const wallet = new Wallet(updater);
-    const provider = new AnchorProvider(connection, wallet, { commitment: 'confirmed' });
-    const program = new Program(idl, provider);
+  const wallet = new Wallet(updater);
+  const provider = new AnchorProvider(connection, wallet, { commitment: 'confirmed' });
+  const program = getProgram(provider);
     
     // Convert PDA string to PublicKey
     const contractPDAPubkey = new PublicKey(contractPDA);
@@ -283,9 +308,9 @@ export async function updateContractIpfsOnChain(contractId, ipfsHash, creatorWal
     const creatorPubkey = new PublicKey(creatorWallet);
     
     // Create wallet and provider
-    const wallet = new Wallet(updater);
-    const provider = new AnchorProvider(connection, wallet, { commitment: 'confirmed' });
-    const program = new Program(idl, provider);
+  const wallet = new Wallet(updater);
+  const provider = new AnchorProvider(connection, wallet, { commitment: 'confirmed' });
+  const program = getProgram(provider);
     
     // Derive contract PDA
     const [contractPDA] = PublicKey.findProgramAddressSync(
