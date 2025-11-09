@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { CreateContractForm } from './CreateContractForm'
 
-export function Dashboard({ contracts, onCreateContract, onRefresh, onSelectContract }) {
+export function Dashboard({ contracts, onCreateContract, onRefresh, onSelectContract, onDeleteContract, currentUserId }) {
   const [showCreateContract, setShowCreateContract] = useState(false)
+  const [contractToDelete, setContractToDelete] = useState(null)
 
   return (
     <div className="space-y-10 pt-8 pb-16 px-[5vw] md:px-[10vw]">
@@ -92,48 +93,76 @@ export function Dashboard({ contracts, onCreateContract, onRefresh, onSelectCont
             </div>
           ) : (
             <div className="space-y-3">
-              {contracts.map(contract => (
-                <div 
-                  key={contract.id} 
-                  className="border border-gray-200 rounded-2xl p-6 cursor-pointer transition-all hover:border-teal-400 hover:shadow-md group" 
-                  onClick={() => onSelectContract(contract)}
-                >
-                  <div className="flex justify-between items-center">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-3">
-                        <svg className="w-6 h-6 text-teal-600 group-hover:scale-110 transition-transform" fill="none" strokeWidth={2} stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                        </svg>
-                        <div className="flex-1 min-w-0">
-                          <h4 className="font-semibold text-gray-900 group-hover:text-teal-700 transition-colors text-lg mb-1 truncate">
-                            {contract.title}
-                          </h4>
-                          <p className="text-sm text-gray-500 truncate">{contract.description}</p>
+              {contracts.map(contract => {
+                const isCreator = currentUserId && contract.created_by === currentUserId;
+                return (
+                  <div 
+                    key={contract.id} 
+                    className="border border-gray-200 rounded-2xl p-6 transition-all hover:border-teal-400 hover:shadow-md group" 
+                  >
+                    <div className="flex justify-between items-center">
+                      <div 
+                        className="flex-1 cursor-pointer"
+                        onClick={() => onSelectContract(contract)}
+                      >
+                        <div className="flex items-center gap-3 mb-3">
+                          <svg className="w-6 h-6 text-teal-600 group-hover:scale-110 transition-transform" fill="none" strokeWidth={2} stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                          <div className="flex-1 min-w-0">
+                            <h4 className="font-semibold text-gray-900 group-hover:text-teal-700 transition-colors text-lg mb-1 truncate">
+                              {contract.title}
+                            </h4>
+                            <p className="text-sm text-gray-500 truncate">{contract.description}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-4 ml-15">
+                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${
+                            contract.status === 'active' ? 'bg-emerald-100 text-emerald-700' :
+                            contract.status === 'draft' ? 'bg-orange-100 text-orange-700' :
+                            contract.status === 'review' ? 'bg-amber-100 text-amber-700' :
+                            'bg-gray-100 text-gray-700'
+                          }`}>
+                            {contract.status}
+                          </span>
+                          <span className="flex items-center gap-1.5 text-xs text-gray-500">
+                            <svg className="w-4 h-4" fill="none" strokeWidth={2} stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                            </svg>
+                            {contract.member_count}
+                          </span>
                         </div>
                       </div>
-                      <div className="flex items-center gap-4 ml-15">
-                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${
-                          contract.status === 'active' ? 'bg-emerald-100 text-emerald-700' :
-                          contract.status === 'draft' ? 'bg-orange-100 text-orange-700' :
-                          contract.status === 'review' ? 'bg-amber-100 text-amber-700' :
-                          'bg-gray-100 text-gray-700'
-                        }`}>
-                          {contract.status}
-                        </span>
-                        <span className="flex items-center gap-1.5 text-xs text-gray-500">
-                          <svg className="w-4 h-4" fill="none" strokeWidth={2} stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                          </svg>
-                          {contract.member_count}
-                        </span>
+                      <div className="flex items-center gap-2">
+                        {isCreator && onDeleteContract && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setContractToDelete(contract);
+                            }}
+                            className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Delete contract"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        )}
+                        <svg 
+                          className="w-6 h-6 text-gray-300 group-hover:text-teal-600 transition-colors shrink-0 ml-4 cursor-pointer" 
+                          fill="none" 
+                          strokeWidth={2.5} 
+                          stroke="currentColor" 
+                          viewBox="0 0 24 24"
+                          onClick={() => onSelectContract(contract)}
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                        </svg>
                       </div>
                     </div>
-                    <svg className="w-6 h-6 text-gray-300 group-hover:text-teal-600 transition-colors shrink-0 ml-4" fill="none" strokeWidth={2.5} stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                    </svg>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -144,6 +173,43 @@ export function Dashboard({ contracts, onCreateContract, onRefresh, onSelectCont
           onCreate={onCreateContract} 
           onClose={() => setShowCreateContract(false)}
         />
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {contractToDelete && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          onClick={() => setContractToDelete(null)}
+        >
+          <div 
+            className="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-xl font-semibold text-gray-900 mb-4">Delete Contract</h3>
+            <p className="text-gray-600 mb-6">
+              Are you sure you want to delete "<strong>{contractToDelete.title}</strong>"? This action cannot be undone and will permanently delete the contract and all associated data.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setContractToDelete(null)}
+                className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  if (onDeleteContract) {
+                    await onDeleteContract(contractToDelete.id);
+                    setContractToDelete(null);
+                  }
+                }}
+                className="px-4 py-2 text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

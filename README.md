@@ -1,8 +1,8 @@
-![Agreed Logo](images/Logo.png)
+![Pact. Logo](images/Logo.png)
 
-# Agreed - Git for Legal Agreements
+# Pact. - Git for Legal Agreements
 
-Agreed is a collaborative contract management platform that brings version control to legal agreements, powered by Solana blockchain for trustless coordination and cryptographic proof.
+Pact. is a collaborative contract management platform that brings version control to legal agreements, powered by Solana blockchain for trustless coordination and cryptographic proof.
 
 ## The Problem
 
@@ -15,7 +15,7 @@ Contract collaboration is broken in most organizations:
 
 ## The Solution
 
-Agreed combines Git-style version control with blockchain verification:
+Pact. combines Git-style version control with blockchain verification:
 
 1. **Create** - All stakeholders see the same contract version
 2. **Propose** - Changes tracked with full diff history and commits
@@ -190,7 +190,7 @@ avm use latest
 ```bash
 # Clone repo
 git clone [your-repo-url]
-cd agreed
+cd Pact.
 
 # Build Solana program
 cd programs/agreed-contracts
@@ -248,7 +248,7 @@ console.log(`Contracts Created: ${rep.contractsCreated}`);
 
 ## Why This Matters
 
-Every contract is a promise. Right now, promises live in email threads, lawyers' desks, and people's memory. Agreed puts them in version-controlled, cryptographically-verified, immutable shared truth.
+Every contract is a promise. Right now, promises live in email threads, lawyers' desks, and people's memory. Pact. puts them in version-controlled, cryptographically-verified, immutable shared truth.
 
 This isn't about replacing lawyers. It's about giving everyone the tools lawyers wish they had.
 

@@ -261,55 +261,40 @@ router.post('/:id/invite', authenticateToken, (req, res) => {
           return res.status(400).json({ error: 'User is already a member of this contract' });
         }
 
-        // Check if invitation already exists
-        const inviteQuery = email 
-          ? 'SELECT * FROM contract_invitations WHERE contract_id = ? AND email = ? AND status = "pending"'
-          : 'SELECT * FROM contract_invitations WHERE contract_id = ? AND wallet_address = ? AND status = "pending"';
+        // Create invitation (allow duplicates - multiple invitations can be sent)
+        const invitationId = uuidv4();
+        const invitationToken = uuidv4();
+        const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
-        db.get(inviteQuery, [id, checkParam], (err, existingInvite) => {
-          if (err) {
-            return res.status(500).json({ error: 'Database error' });
-          }
-
-          if (existingInvite) {
-            return res.status(400).json({ error: 'Invitation already sent to this user' });
-          }
-
-          // Create invitation
-          const invitationId = uuidv4();
-          const invitationToken = uuidv4();
-          const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
-
-          db.run(
-            'INSERT INTO contract_invitations (id, contract_id, email, wallet_address, role_in_contract, invitation_token, invited_by, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-            [invitationId, id, email, wallet_address, role_in_contract, invitationToken, req.user.userId, expiresAt.toISOString()],
-            function(err) {
-              if (err) {
-                return res.status(500).json({ error: 'Failed to create invitation' });
-              }
-
-              // Generate invitation link
-              const invitationLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/invite/${invitationToken}`;
-
-              // Send email if email provided
-              if (email) {
-                sendInvitationEmailDev(email, invitationLink, contract.title, req.user.name || 'Contract Owner');
-              }
-
-              res.json({ 
-                invitation: { 
-                  id: invitationId, 
-                  contract_id: id, 
-                  email, 
-                  wallet_address,
-                  role_in_contract, 
-                  invitation_link: invitationLink,
-                  expires_at: expiresAt.toISOString()
-                } 
-              });
+        db.run(
+          'INSERT INTO contract_invitations (id, contract_id, email, wallet_address, role_in_contract, invitation_token, invited_by, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+          [invitationId, id, email, wallet_address, role_in_contract, invitationToken, req.user.userId, expiresAt.toISOString()],
+          function(err) {
+            if (err) {
+              return res.status(500).json({ error: 'Failed to create invitation' });
             }
-          );
-        });
+
+            // Generate invitation link
+            const invitationLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/invite/${invitationToken}`;
+
+            // Send email if email provided
+            if (email) {
+              sendInvitationEmailDev(email, invitationLink, contract.title, req.user.name || 'Contract Owner');
+            }
+
+            res.json({ 
+              invitation: { 
+                id: invitationId, 
+                contract_id: id, 
+                email, 
+                wallet_address,
+                role_in_contract, 
+                invitation_link: invitationLink,
+                expires_at: expiresAt.toISOString()
+              } 
+            });
+          }
+        );
       });
     }
   );
@@ -558,6 +543,134 @@ router.get('/:id/solana-pda', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Error getting contract PDA:', error);
     res.status(500).json({ error: 'Failed to get contract PDA' });
+  }
+});
+
+// Delete contract
+router.delete('/:id', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    // Verify contract exists and user is the creator
+    const contract = await new Promise((resolve, reject) => {
+      db.get(
+        'SELECT * FROM contracts WHERE id = ?',
+        [id],
+        (err, row) => {
+          if (err) reject(err);
+          else if (!row) reject(new Error('Contract not found'));
+          else resolve(row);
+        }
+      );
+    });
+
+    // Only allow contract creator to delete
+    if (contract.created_by !== req.user.userId) {
+      return res.status(403).json({ error: 'Only the contract creator can delete this contract' });
+    }
+
+    // Helper function to run SQL with promise
+    const runSQL = (sql, params = []) => {
+      return new Promise((resolve, reject) => {
+        db.run(sql, params, function(err) {
+          if (err) reject(err);
+          else resolve(this);
+        });
+      });
+    };
+
+    // Helper function to run SQL that may fail if table doesn't exist
+    const runSQLOptional = async (sql, params = []) => {
+      try {
+        await runSQL(sql, params);
+      } catch (err) {
+        // Ignore "no such table" errors
+        if (!err.message.includes('no such table')) {
+          console.error(`Error executing ${sql}:`, err);
+        }
+      }
+    };
+
+    // Begin transaction
+    await runSQL('BEGIN TRANSACTION');
+
+    try {
+      // Get all version IDs for this contract
+      const versions = await new Promise((resolve, reject) => {
+        db.all(
+          'SELECT id FROM contract_versions WHERE contract_id = ?',
+          [id],
+          (err, rows) => {
+            if (err) reject(err);
+            else resolve(rows || []);
+          }
+        );
+      });
+
+      const versionIds = versions.map(v => v.id);
+
+      // Delete contract comments (referenced by version_id)
+      if (versionIds.length > 0) {
+        const placeholders = versionIds.map(() => '?').join(',');
+        await runSQL(
+          `DELETE FROM contract_comments WHERE version_id IN (${placeholders})`,
+          versionIds
+        );
+      }
+
+      // Delete contract approvals (referenced by version_id)
+      if (versionIds.length > 0) {
+        const placeholders = versionIds.map(() => '?').join(',');
+        await runSQL(
+          `DELETE FROM contract_approvals WHERE version_id IN (${placeholders})`,
+          versionIds
+        );
+      }
+
+      // Delete contract diffs (referenced by version_id)
+      if (versionIds.length > 0) {
+        const placeholders = versionIds.map(() => '?').join(',');
+        await runSQL(
+          `DELETE FROM contract_diffs WHERE version_from_id IN (${placeholders}) OR version_to_id IN (${placeholders})`,
+          [...versionIds, ...versionIds]
+        );
+      }
+
+      // Delete contract versions
+      await runSQL('DELETE FROM contract_versions WHERE contract_id = ?', [id]);
+
+      // Delete contract members
+      await runSQL('DELETE FROM contract_members WHERE contract_id = ?', [id]);
+
+      // Delete contract invitations
+      await runSQL('DELETE FROM contract_invitations WHERE contract_id = ?', [id]);
+
+      // Delete optional tables (ignore if they don't exist)
+      await runSQLOptional('DELETE FROM contract_clauses WHERE contract_id = ?', [id]);
+      await runSQLOptional('DELETE FROM contract_deadlines WHERE contract_id = ?', [id]);
+      await runSQLOptional('DELETE FROM payment_milestones WHERE contract_id = ?', [id]);
+
+      // Finally, delete the contract itself
+      await runSQL('DELETE FROM contracts WHERE id = ?', [id]);
+
+      // Commit transaction
+      await runSQL('COMMIT');
+
+      res.json({ 
+        message: 'Contract deleted successfully',
+        contractId: id
+      });
+    } catch (error) {
+      // Rollback on error
+      await runSQL('ROLLBACK').catch(() => {});
+      throw error;
+    }
+  } catch (error) {
+    console.error('Error deleting contract:', error);
+    if (error.message === 'Contract not found') {
+      return res.status(404).json({ error: 'Contract not found' });
+    }
+    return res.status(500).json({ error: 'Failed to delete contract' });
   }
 });
 

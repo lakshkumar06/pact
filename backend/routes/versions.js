@@ -267,6 +267,7 @@ router.post('/contracts/:contractId/versions', authenticateToken, (req, res) => 
 // Get all versions for a contract
 router.get('/contracts/:contractId/versions', authenticateToken, (req, res) => {
   const { contractId } = req.params;
+  const { excludeMerged } = req.query; // Optional query param to exclude merged versions
 
   // Verify contract access
   db.get(
@@ -277,13 +278,23 @@ router.get('/contracts/:contractId/versions', authenticateToken, (req, res) => {
         return res.status(404).json({ error: 'Contract not found' });
       }
 
-      db.all(
-        `SELECT v.*, u.name as author_name
+      // Build query - exclude merged versions if requested
+      let query = `SELECT v.*, u.name as author_name
          FROM contract_versions v
          JOIN users u ON v.author_id = u.id
-         WHERE v.contract_id = ?
-         ORDER BY v.version_number DESC`,
-        [contractId],
+         WHERE v.contract_id = ?`;
+      
+      const queryParams = [contractId];
+      
+      if (excludeMerged === 'true' || excludeMerged === '1') {
+        query += ' AND (v.merged = 0 OR v.merged IS NULL)';
+      }
+      
+      query += ' ORDER BY v.version_number DESC';
+
+      db.all(
+        query,
+        queryParams,
         (err, versions) => {
           if (err) {
             return res.status(500).json({ error: 'Database error' });
@@ -648,21 +659,91 @@ router.get('/contracts/:contractId/versions/:versionId/approvals', authenticateT
             return res.status(500).json({ error: 'Database error' });
           }
 
-          // Get version info
+          // Get version info including merged status
           db.get(
-            'SELECT approval_status, approval_score FROM contract_versions WHERE id = ?',
+            'SELECT approval_status, approval_score, merged FROM contract_versions WHERE id = ?',
             [versionId],
             (err, version) => {
               if (err) {
                 return res.status(500).json({ error: 'Database error' });
               }
 
-              res.json({
-                approvals,
-                status: version.approval_status,
-                approval_count: approvals.filter(a => a.vote === 'approve').length,
-                rejection_count: approvals.filter(a => a.vote === 'reject').length
-              });
+              const approvalCount = approvals.filter(a => a.vote === 'approve').length;
+              const rejectionCount = approvals.filter(a => a.vote === 'reject').length;
+
+              // Check if we should auto-merge (100% approval but not yet merged)
+              if (!version.merged) {
+                // Get total member count
+                db.get(
+                  'SELECT COUNT(*) as total FROM contract_members WHERE contract_id = ?',
+                  [contractId],
+                  (err, memberCount) => {
+                    if (!err && memberCount) {
+                      const totalMembers = memberCount.total;
+                      
+                      // Auto-merge if all members approved (100%)
+                      if (approvalCount === totalMembers && approvalCount > 0) {
+                        console.log('[GET_APPROVALS] Auto-merging version - approvalCount:', approvalCount, 'totalMembers:', totalMembers);
+                        
+                        // Perform auto-merge
+                        db.get(
+                          'SELECT v.content, v.author_id, u.wallet_address as author_wallet FROM contract_versions v JOIN users u ON v.author_id = u.id WHERE v.id = ?',
+                          [versionId],
+                          async (err, versionData) => {
+                            if (!err && versionData) {
+                              // Update contract's current version and content
+                              db.run(
+                                'UPDATE contracts SET current_version = ?, content = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+                                [versionId, versionData.content, contractId],
+                                function(err) {
+                                  if (!err) {
+                                    // Mark version as merged
+                                    db.run(
+                                      'UPDATE contract_versions SET approval_status = ?, merged = 1 WHERE id = ?',
+                                      ['merged', versionId],
+                                      async function(err) {
+                                        if (!err) {
+                                          console.log('[GET_APPROVALS] Version auto-merged successfully');
+                                          // Optionally store contract proof
+                                          try {
+                                            const { storeContractProof } = require('../services/ipfsService');
+                                            await storeContractProof(versionId, versionData.content, contractId);
+                                          } catch (proofErr) {
+                                            console.error('[GET_APPROVALS] Error storing proof:', proofErr);
+                                          }
+                                        }
+                                      }
+                                    );
+                                  }
+                                }
+                              );
+                            }
+                          }
+                        );
+                      }
+                    }
+                    
+                    // Return response
+                    res.json({
+                      approvals,
+                      status: version.merged ? 'merged' : version.approval_status,
+                      approval_count: approvalCount,
+                      rejection_count: rejectionCount,
+                      total_members: memberCount?.total || 0,
+                      merged: version.merged || false
+                    });
+                  }
+                );
+              } else {
+                // Already merged, just return the data
+                res.json({
+                  approvals,
+                  status: 'merged',
+                  approval_count: approvalCount,
+                  rejection_count: rejectionCount,
+                  merged: true
+                });
+              }
             }
           );
         }

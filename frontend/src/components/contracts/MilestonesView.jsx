@@ -375,7 +375,6 @@ export function MilestonesView({ contractId, contract, currentUser, isCreator })
         contract.solana_contract_pda || undefined
       )
 
-      alert(`Milestone marked as complete! Now auto-approving...`)
       
       // Auto-approve for the user who marked it complete
       try {
@@ -387,7 +386,7 @@ export function MilestonesView({ contractId, contract, currentUser, isCreator })
           contract.solana_contract_pda || undefined
         )
         
-        alert(`Milestone marked complete and approved! Transactions: ${signature.slice(0, 8)}... & ${approveSignature.slice(0, 8)}...`)
+        alert(`Milestone marked complete! Transactions: ${signature.slice(0, 8)}... & ${approveSignature.slice(0, 8)}...`)
       } catch (approveError) {
         console.warn('Auto-approve failed:', approveError)
         alert(`Milestone marked complete! Transaction: ${signature}\n\nNote: Please click "Approve Release" to approve.`)

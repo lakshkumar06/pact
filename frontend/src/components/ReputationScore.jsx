@@ -7,7 +7,7 @@ const API_BASE = 'http://localhost:3001/api';
  * Component to display reputation scores for a user
  * Shows client and vendor reputation separately
  */
-export function ReputationScore({ userId, walletAddress, roleType = null, compact = false }) {
+export function ReputationScore({ userId, walletAddress, roleType = null, compact = false, onClick = null }) {
   const [reputation, setReputation] = useState({ client: null, vendor: null });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -75,17 +75,17 @@ export function ReputationScore({ userId, walletAddress, roleType = null, compac
     const score = reputation[roleType];
     if (!score) return null;
     
-    return <ReputationDisplay score={score} roleType={roleType} compact={compact} />;
+    return <ReputationDisplay score={score} roleType={roleType} compact={compact} onClick={onClick} />;
   }
 
   // Display both client and vendor
   return (
     <div className={`space-y-3 ${compact ? 'space-y-2' : ''}`}>
       {reputation.client && (
-        <ReputationDisplay score={reputation.client} roleType="client" compact={compact} />
+        <ReputationDisplay score={reputation.client} roleType="client" compact={compact} onClick={onClick} />
       )}
       {reputation.vendor && (
-        <ReputationDisplay score={reputation.vendor} roleType="vendor" compact={compact} />
+        <ReputationDisplay score={reputation.vendor} roleType="vendor" compact={compact} onClick={onClick} />
       )}
     </div>
   );
@@ -94,7 +94,7 @@ export function ReputationScore({ userId, walletAddress, roleType = null, compac
 /**
  * Display a single reputation score
  */
-function ReputationDisplay({ score, roleType, compact }) {
+function ReputationDisplay({ score, roleType, compact, onClick }) {
   const isClient = roleType === 'client';
   const overallScore = score.overall_score || 0;
   
@@ -113,11 +113,30 @@ function ReputationDisplay({ score, roleType, compact }) {
   };
 
   if (compact) {
+    const baseClasses = `inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border ${getScoreColor(overallScore)}`;
+    const clickableClasses = onClick ? 'cursor-pointer hover:shadow-md hover:scale-105 transition-all' : '';
+    
     return (
-      <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border ${getScoreColor(overallScore)}`}>
+      <div 
+        className={`${baseClasses} ${clickableClasses}`}
+        onClick={onClick ? () => onClick(roleType) : undefined}
+        role={onClick ? "button" : undefined}
+        tabIndex={onClick ? 0 : undefined}
+        onKeyDown={onClick ? (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onClick(roleType);
+          }
+        } : undefined}
+      >
         <span className="text-xs font-semibold capitalize">{roleType}:</span>
         <span className="text-sm font-bold">{Math.round(overallScore)}</span>
         <span className="text-xs">/100</span>
+        {onClick && (
+          <svg className="w-3 h-3 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+          </svg>
+        )}
       </div>
     );
   }

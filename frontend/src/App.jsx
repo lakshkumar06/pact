@@ -246,6 +246,23 @@ function App() {
     }
   }
 
+  const deleteContract = async (contractId) => {
+    try {
+      await axios.delete(`${API_BASE}/contracts/${contractId}`)
+      // If the deleted contract was currently selected, clear the selection
+      if (selectedContract && selectedContract.id === contractId) {
+        setSelectedContract(null)
+        setSelectedVersion(null)
+      }
+      // Reload dashboard to refresh the contract list
+      await loadDashboard()
+    } catch (error) {
+      console.error('Error deleting contract:', error)
+      alert(error.response?.data?.error || 'Failed to delete contract')
+      throw error
+    }
+  }
+
   const handleSelectVersion = (version) => {
     setSelectedVersion(version)
   }
@@ -318,7 +335,7 @@ function App() {
         <div className="max-w-md w-full space-y-8">
           <div>
             <h2 className="mt-6 text-center text-3xl font-semibold text-gray-900">
-              Agreed.
+              Pact.
             </h2>
             <p className="mt-2 text-center text-sm text-gray-600">
               Collaborative B2B Contract Workspace
@@ -368,18 +385,14 @@ function App() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-20">
             <div className="flex items-center">
-              <img src="/logo.png" alt="Agreed logo" className="h-12 w-auto mr-2" />
+              <img src="/logo.png" alt="Pact. logo" className="h-9 w-auto mr-2" />
             </div>
             <div className="flex items-center space-x-4">
               <span className="text-sm text-gray-700">{user.name}</span>
-              {connected && (
-                <div className="text-xs text-gray-500">
-                  {publicKey?.toString().slice(0, 8)}...
-                </div>
-              )}
+
               <button
                 onClick={handleLogout}
-                className="text-sm text-gray-500 hover:text-gray-700"
+                className="text-sm text-red-700 hover:text-gray-700"
               >
                 Logout
               </button>
@@ -426,6 +439,8 @@ function App() {
             contracts={contracts} 
             onCreateContract={createContract}
             onRefresh={loadDashboard}
+            onDeleteContract={deleteContract}
+            currentUserId={user?.id}
             onSelectContract={(contract) => {
               setSelectedContract(contract)
               loadContractDetails(contract.id)

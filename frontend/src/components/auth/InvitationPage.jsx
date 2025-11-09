@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { ReputationScore } from '../ReputationScore';
+import { CompanyInfoPopup } from '../CompanyInfoPopup';
 import axios from 'axios';
 
 const API_BASE = 'http://localhost:3001/api';
@@ -8,6 +9,8 @@ const API_BASE = 'http://localhost:3001/api';
 export function InvitationPage({ invitation, user, onLogin, onRegister, onAccept }) {
   const [inviterReputation, setInviterReputation] = useState({ client: null, vendor: null });
   const [loadingReputation, setLoadingReputation] = useState(true);
+  const [showCompanyPopup, setShowCompanyPopup] = useState(false);
+  const [popupRoleType, setPopupRoleType] = useState(null);
   
   useEffect(() => {
     if (invitation?.invited_by || invitation?.invited_by_user_id) {
@@ -51,6 +54,16 @@ export function InvitationPage({ invitation, user, onLogin, onRegister, onAccept
     // If invitee is vendor, show client reputation; if invitee is client, show vendor reputation
     return role === 'vendor' ? 'client' : role === 'client' ? 'vendor' : null;
   };
+
+  const handleReputationClick = (roleType) => {
+    setPopupRoleType(roleType);
+    setShowCompanyPopup(true);
+  };
+
+  const handleClosePopup = () => {
+    setShowCompanyPopup(false);
+    setPopupRoleType(null);
+  };
   if (!invitation) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -85,7 +98,7 @@ export function InvitationPage({ invitation, user, onLogin, onRegister, onAccept
           {/* Reputation Score Display */}
           <div className="bg-teal-50 border border-teal-200 rounded-2xl p-4">
             <h4 className="text-sm font-semibold text-teal-900 mb-3">
-              {invitation.invited_by_name}'s Reputation
+              {invitation.invited_by_name}
             </h4>
             
             {loadingReputation ? (
@@ -105,6 +118,7 @@ export function InvitationPage({ invitation, user, onLogin, onRegister, onAccept
                         userId={invitation.invited_by || invitation.invited_by_user_id} 
                         roleType={relevantRole} 
                         compact={true}
+                        onClick={handleReputationClick}
                       />
                     );
                   }
@@ -117,6 +131,7 @@ export function InvitationPage({ invitation, user, onLogin, onRegister, onAccept
                           userId={invitation.invited_by || invitation.invited_by_user_id} 
                           roleType="client" 
                           compact={true}
+                          onClick={handleReputationClick}
                         />
                       )}
                       {inviterReputation.vendor && (
@@ -124,35 +139,55 @@ export function InvitationPage({ invitation, user, onLogin, onRegister, onAccept
                           userId={invitation.invited_by || invitation.invited_by_user_id} 
                           roleType="vendor" 
                           compact={true}
+                          onClick={handleReputationClick}
                         />
                       )}
                     </>
                   );
                 })()}
-                <p className="text-xs text-teal-700 mt-3">
-                  {invitation.role_in_contract?.toLowerCase() === 'vendor' 
-                    ? "As a vendor, you'll work with this client. This shows their client reputation."
-                    : invitation.role_in_contract?.toLowerCase() === 'client'
-                    ? "As a client, you'll work with this vendor. This shows their vendor reputation."
-                    : "These scores are based on their on-chain contract history"}
-                </p>
+      
               </div>
             ) : (
-              <div className="text-sm text-gray-600 py-2">
-                <p>No reputation data available yet.</p>
-                <p className="text-xs text-gray-500 mt-1">
-                  Reputation scores are calculated from on-chain contract activity. This user hasn't completed any contracts yet.
-                </p>
+              <div className="space-y-3">
+                {/* Show default rating when no reputation data is available */}
+                {(() => {
+                  const relevantRole = getRelevantReputationRole() || 'vendor';
+                  const defaultScore = 0;
+                  
+                  return (
+                    <div 
+                      className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border border-gray-300 bg-gray-50 text-gray-600 cursor-pointer hover:shadow-md hover:scale-105 transition-all"
+                      onClick={() => handleReputationClick(relevantRole)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          handleReputationClick(relevantRole);
+                        }
+                      }}
+                    >
+                      <span className="text-xs font-semibold capitalize">{relevantRole}:</span>
+                      <span className="text-sm font-bold">{defaultScore}</span>
+                      <span className="text-xs">/100</span>
+                      <svg className="w-3 h-3 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                      </svg>
+                    </div>
+                  );
+                })()}
+                
+                <div className="text-xs text-gray-500 mt-2">
+                  <p>No reputation data available yet.</p>
+                  <p className="mt-1">
+                    Reputation scores are calculated from on-chain contract activity. This user hasn't completed any contracts yet.
+                  </p>
+                </div>
               </div>
             )}
           </div>
 
-          {invitation.email && (
-            <div className="text-sm text-gray-600 bg-blue-50 p-3 rounded-lg">
-              <p><strong>Invited email:</strong> {invitation.email}</p>
-              <p className="text-xs mt-1">You must login with this email address to accept the invitation.</p>
-            </div>
-          )}
+     
         </div>
 
         {!user ? (
@@ -178,7 +213,6 @@ export function InvitationPage({ invitation, user, onLogin, onRegister, onAccept
         ) : (
           <div className="space-y-4">
             <div className="text-center">
-              <p className="text-gray-600 mb-4">Welcome, {user.name}!</p>
               {invitation.email && user.email !== invitation.email && (
                 <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
                   <p className="text-sm text-red-800">
@@ -224,6 +258,14 @@ export function InvitationPage({ invitation, user, onLogin, onRegister, onAccept
           </div>
         )}
       </div>
+
+      {/* Company Info Popup */}
+      <CompanyInfoPopup
+        isOpen={showCompanyPopup}
+        onClose={handleClosePopup}
+        roleType={popupRoleType}
+        companyName={invitation.invited_by_name}
+      />
     </div>
   )
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import axios from 'axios'
 
 const API_BASE = 'http://localhost:3001/api'
@@ -7,23 +7,34 @@ export function ApprovalRequestsView({ contractId, versions, onSelectVersion, cu
   const [approvals, setApprovals] = useState({});
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadApprovals();
+  // Filter out merged versions - only show versions that need approval
+  const pendingVersions = useMemo(() => {
+    return versions.filter(v => !v.merged && v.approval_status !== 'merged');
   }, [versions]);
 
-  const loadApprovals = async () => {
-    const approvalsMap = {};
-    for (const version of versions) {
-      try {
-        const res = await axios.get(`${API_BASE}/contracts/${contractId}/versions/${version.id}/approvals`);
-        approvalsMap[version.id] = res.data;
-      } catch (error) {
-        console.error('Error loading approvals:', error);
+  useEffect(() => {
+    const loadApprovals = async () => {
+      setLoading(true);
+      const approvalsMap = {};
+      // Only load approvals for non-merged versions
+      for (const version of pendingVersions) {
+        try {
+          const res = await axios.get(`${API_BASE}/contracts/${contractId}/versions/${version.id}/approvals`);
+          approvalsMap[version.id] = res.data;
+          // If the approval response indicates it was just merged, it will be filtered out on next render
+          if (res.data.merged) {
+            console.log('Version was auto-merged:', version.id);
+          }
+        } catch (error) {
+          console.error('Error loading approvals:', error);
+        }
       }
-    }
-    setApprovals(approvalsMap);
-    setLoading(false);
-  };
+      setApprovals(approvalsMap);
+      setLoading(false);
+    };
+    
+    loadApprovals();
+  }, [versions, contractId]);
 
   return (
     <div className="bg-white rounded-3xl border border-gray-200 overflow-hidden">
@@ -31,7 +42,7 @@ export function ApprovalRequestsView({ contractId, versions, onSelectVersion, cu
         <h2 className="text-2xl font-semibold text-gray-900 mb-6">Approval Requests</h2>
         {loading ? (
           <p className="text-gray-500 text-center py-8">Loading...</p>
-        ) : versions.length === 0 ? (
+        ) : pendingVersions.length === 0 ? (
           <div className="rounded-3xl p-16 text-center">
             <div className="w-24 h-24 mx-auto mb-6">
               <svg className="w-24 h-24 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -42,11 +53,17 @@ export function ApprovalRequestsView({ contractId, versions, onSelectVersion, cu
           </div>
         ) : (
           <div className="space-y-3">
-            {versions.map((version) => {
+            {pendingVersions.map((version) => {
               const versionApprovals = approvals[version.id];
               const approvalCount = versionApprovals?.approval_count || 0;
               const rejectionCount = versionApprovals?.rejection_count || 0;
-              const status = version.approval_status || 'pending';
+              // Use merged status from API response if available, otherwise use version status
+              const status = versionApprovals?.merged ? 'merged' : (versionApprovals?.status || version.approval_status || 'pending');
+              
+              // Skip rendering if this version was just merged
+              if (versionApprovals?.merged) {
+                return null;
+              }
 
               return (
                 <div 

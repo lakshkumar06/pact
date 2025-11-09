@@ -267,9 +267,54 @@ function storeReputationScore(reputationData) {
             last_calculated_at
           ], (err) => {
             if (err) {
-              return reject(err);
+              // If UNIQUE constraint error, record was inserted by another concurrent request
+              // Retry with UPDATE instead
+              if (err.code === 'SQLITE_CONSTRAINT' && err.errno === 19) {
+                db.run(`
+                  UPDATE user_reputation_scores SET
+                    wallet_address = ?,
+                    payment_timeliness_score = ?,
+                    payment_on_time_count = ?,
+                    payment_late_count = ?,
+                    payment_dispute_count = ?,
+                    delivery_timeliness_score = ?,
+                    delivery_on_time_count = ?,
+                    delivery_late_count = ?,
+                    delivery_quality_score = ?,
+                    total_contracts_as_client = ?,
+                    total_contracts_as_vendor = ?,
+                    overall_score = ?,
+                    last_calculated_at = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                  WHERE user_id = ? AND role_type = ?
+                `, [
+                  wallet_address,
+                  payment_timeliness_score || 0,
+                  payment_on_time_count || 0,
+                  payment_late_count || 0,
+                  payment_dispute_count || 0,
+                  delivery_timeliness_score || 0,
+                  delivery_on_time_count || 0,
+                  delivery_late_count || 0,
+                  delivery_quality_score || 0,
+                  total_contracts_as_client || 0,
+                  total_contracts_as_vendor || 0,
+                  overall_score || 0,
+                  last_calculated_at,
+                  user_id,
+                  role_type
+                ], (updateErr) => {
+                  if (updateErr) {
+                    return reject(updateErr);
+                  }
+                  resolve();
+                });
+              } else {
+                return reject(err);
+              }
+            } else {
+              resolve();
             }
-            resolve();
           });
         }
       }
